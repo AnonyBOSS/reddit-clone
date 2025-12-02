@@ -5,6 +5,7 @@ import {
   ChatBubbleBottomCenterTextIcon,
 } from "@heroicons/react/24/outline";
 import VoteButtons from "./VoteButtons";
+import { Link } from "react-router-dom";
 
 export default function PostCardFull({ postId }) {
   const post = {
@@ -38,7 +39,16 @@ export default function PostCardFull({ postId }) {
 
         <div className="flex-1">
           <div className="text-sm text-reddit-text_secondary dark:text-reddit-dark_text_secondary">
-            {post.subreddit} • Posted by 
+            {/** Normalize subreddit name (remove leading r/ if present) */}
+            {(() => {
+              const name = post.subreddit?.replace(/^r\//i, "") || "";
+              return (
+                <>
+                  <Link to={`/r/${name}`} className="text-sm font-semibold hover:underline text-reddit-text dark:text-reddit-dark_text">r/{name}</Link>
+                  {" • Posted by "}
+                </>
+              );
+            })()}
             <span className="font-semibold text-reddit-text dark:text-reddit-dark_text"> {post.author}</span> • {post.time}
           </div>
 

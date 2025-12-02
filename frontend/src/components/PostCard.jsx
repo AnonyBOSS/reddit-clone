@@ -4,7 +4,7 @@ import {
   EllipsisHorizontalIcon,
 } from "@heroicons/react/24/outline";
 import VoteButtons from "./VoteButtons";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 export default function PostCard({
   id,
@@ -50,9 +50,13 @@ export default function PostCard({
             className="h-6 w-6 rounded-full"
           />
 
-          <span className="font-semibold text-reddit-text dark:text-reddit-dark_text">
+          <Link
+            to={`/r/${subreddit}`}
+            onClick={(e) => e.stopPropagation()}
+            className="text-sm font-semibold text-reddit-text dark:text-reddit-dark_text hover:underline"
+          >
             r/{subreddit}
-          </span>
+          </Link>
 
           <span>•</span>
           <span>{time}</span>

@@ -3,7 +3,7 @@ import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import MenuButton from "../components/MenuButton";
 
-export default function MainLayout({ children }) {
+export default function MainLayout({ children, noRightSidebar = false }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
@@ -12,18 +12,15 @@ export default function MainLayout({ children }) {
 
       <div className="relative flex gap-6 px-4 lg:px-8 pt-6">
 
-        {/* Left sidebar column */}
+        {/* Left sidebar */}
         <div className={`${sidebarOpen ? "block" : "hidden"} lg:block`}>
           <Sidebar sidebarOpen={sidebarOpen} />
         </div>
 
-        {/* Divider + menu button column */}
+        {/* Divider + floating menu button */}
         <div className="relative flex flex-col items-center">
+          <div className="min-h-screen w-px bg-reddit-divider dark:bg-reddit-dark_divider"></div>
 
-          {/* full-height vertical divider */}
-          <div className="min-h-screen w-px bg-reddit-divider dark:bg-reddit-dark_divider transition-colors duration-200"></div>
-
-          {/* menu button floating on the divider */}
           <div className="absolute -left-3 top-6 lg:-left-2 hidden lg:block">
             <MenuButton
               open={sidebarOpen}
@@ -32,18 +29,19 @@ export default function MainLayout({ children }) {
           </div>
         </div>
 
-        {/* Main content */}
+        {/* Page content */}
         <main className="flex-1 flex justify-center">
-          <div className="w-full max-w-[740px]">
+          <div className={`w-full ${noRightSidebar ? "max-w-[1100px]" : "max-w-[740px]"}`}>
             {children}
           </div>
         </main>
 
-        {/* Right column */}
-        <aside className="hidden xl:block w-[320px]">
-          {/* Right widgets */}
-        </aside>
-
+        {/* Right sidebar — hidden if community page */}
+        {!noRightSidebar && (
+          <aside className="hidden xl:block w-[320px]">
+            {/* Right widgets */}
+          </aside>
+        )}
       </div>
     </div>
   );
