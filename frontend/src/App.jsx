@@ -10,6 +10,7 @@ import PopularPage from "./pages/PopularPage";
 import AllPage from "./pages/AllPage";
 import ExplorePage from "./pages/ExplorePage";
 import CreateCommunityPage from "./pages/CreateCommunityPage";
+import ProfilePage from "./pages/ProfilePage";
 
 function App() {
   return (
@@ -89,6 +90,15 @@ function App() {
           element={
             <MainLayout noRightSidebar={true}>
               <CommunityPage />
+            </MainLayout>
+          }
+        />
+        
+        <Route
+          path="/u/:username"
+          element={
+            <MainLayout noRightSidebar={true}>
+              <ProfilePage />
             </MainLayout>
           }
         />
