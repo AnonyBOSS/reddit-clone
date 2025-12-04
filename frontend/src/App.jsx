@@ -5,7 +5,7 @@ import PostPage from "./pages/PostPage";
 import CommunityPage from "./pages/CommunityPage";
 import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
-
+import ChatPage from "./components/ChatPage";
 import PopularPage from "./pages/PopularPage";
 import AllPage from "./pages/AllPage";
 import ExplorePage from "./pages/ExplorePage";
@@ -28,6 +28,14 @@ function App() {
               <PopularPage />
             </MainLayout>
           }
+        />
+        <Route
+          path="/chat"
+          element={
+        <MainLayout noRightSidebar={true}>
+         <ChatPage />
+        </MainLayout>
+            }
         />
 
         <Route
