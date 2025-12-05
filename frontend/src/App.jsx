@@ -11,6 +11,8 @@ import AllPage from "./pages/AllPage";
 import ExplorePage from "./pages/ExplorePage";
 import CreateCommunityPage from "./pages/CreateCommunityPage";
 import ProfilePage from "./pages/ProfilePage";
+import CreatePost from "./pages/CreatePost"
+
 
 function App() {
   return (
@@ -99,6 +101,15 @@ function App() {
           element={
             <MainLayout noRightSidebar={true}>
               <ProfilePage />
+            </MainLayout>
+          }
+        />
+
+         <Route
+          path="/createpost"
+          element={
+            <MainLayout noRightSidebar={true}>
+              <CreatePost />
             </MainLayout>
           }
         />
