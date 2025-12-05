@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
+const { authLimiter, writeLimiter } = require('./middleware/rateLimiter');
 
 
 const authRoutes = require('./routes/auth');
@@ -24,13 +25,13 @@ connectDB(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/reddit_clone');
 
 
 
-app.use('/api/auth', authRoutes);
-app.use('/api/communities', communityRoutes);
-app.use('/api/posts', postRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/communities', writeLimiter, communityRoutes);
+app.use('/api/posts', writeLimiter, postRoutes);
 app.use('/api/posts', voteRoutes);
-app.use('/api/comments', commentRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/posts', postsImageRoutes);
+app.use('/api/comments', writeLimiter, commentRoutes);
+app.use('/api/users', writeLimiter, userRoutes);
+app.use('/api/posts', writeLimiter, postsImageRoutes);
 
 
 app.get('/', (req, res) => res.json({ message: 'API running' }));

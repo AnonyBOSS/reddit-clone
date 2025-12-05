@@ -31,36 +31,39 @@ router.post("/", auth, async (req, res) => {
 
 router.get("/post/:postId", async (req, res) => {
   try {
-    const flat = await Comment.find({ post: req.params.postId })
+    const page = Math.max(1, parseInt(req.query.page || '1'));
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit || '50')));
+    const postId = req.params.postId;
+
+    const total = await Comment.countDocuments({ post: postId });
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+
+    const flat = await Comment.find({ post: postId })
       .sort({ createdAt: 1 })
-      .populate("author", "username");
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .populate("author", "username")
+      .lean(); // Use lean for performance when manipulating plain objects
 
     // Build nested tree
     const byId = {};
     flat.forEach((c) => {
-      const obj = {
-        id: c._id,
-        post: c.post,
-        author: c.author,
-        body: c.body,
-        parent: c.parent,
-        createdAt: c.createdAt,
-        replies: []
-      };
-      byId[c._id] = obj;
+      // lean() returns plain objects, so we can modify them directly
+      c.id = c._id;
+      c.replies = [];
+      byId[c._id] = c;
     });
 
     const roots = [];
     Object.values(byId).forEach((c) => {
-      if (c.parent) {
-        const parent = byId[c.parent];
-        if (parent) parent.replies.push(c);
+      if (c.parent && byId[c.parent]) {
+        byId[c.parent].replies.push(c);
       } else {
         roots.push(c);
       }
     });
 
-    res.json(roots);
+    res.json({ comments: roots, page, totalPages });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
