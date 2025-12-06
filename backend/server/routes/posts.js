@@ -1,97 +1,229 @@
-
 const express = require('express');
 const router = express.Router();
-const Post = require('../models/Post');
-const Community = require('../models/Community');
-const Vote = require('../models/Vote');
+const validateObjectId = require('../middleware/validateObjectId');
 const auth = require('../middleware/authMiddleware');
+const { writeLimiter } = require('../middleware/rateLimiter');
 
 
 
-router.post('/', auth, async (req, res) => {
+
+// ... (rest of the file)
+
+
+
+router.get('/:id', validateObjectId('id'), async (req, res) => {
+
 	try {
-		const { title, body, communityName, url } = req.body;
-		if (!title || !communityName) return res.status(400).json({ error: 'Missing fields' });
 
-		const community = await Community.findOne({ name: communityName });
-		if (!community) return res.status(404).json({ error: 'Community not found' });
-
-		const post = await Post.create({ title, body, author: req.user._id, community: community._id, url });
-		res.json(await post.populate('author', 'username').populate('community', 'name title'));
-	} catch (err) {
-		res.status(500).json({ error: err.message });
-	}
-});
-
-
-
-router.get('/', async (req, res) => {
-	try {
-		const page = Math.max(1, parseInt(req.query.page || '1'));
-		const limit = 10;
-		const { community, sort } = req.query;
-		const filter = {};
-		if (community) {
-			const comm = await Community.findOne({ name: community });
-			if (!comm) return res.json({ posts: [], page, totalPages: 0 });
-			filter.community = comm._id;
-		}
-
-		// count total
-		const total = await Post.countDocuments(filter);
-		const totalPages = Math.max(1, Math.ceil(total / limit));
-
-		const sortParam = (sort || 'new').toLowerCase();
-
-		// new = newest first; top = highest score; hot = score + age decay
-		if (sortParam === 'hot') {
-			// fetch candidates, compute hot score in JS, sort and paginate
-			const candidates = await Post.find(filter)
-				.populate('author', 'username')
-				.populate('community', 'name title')
-				.lean();
-
-			const now = Date.now();
-			candidates.forEach((p) => {
-				const created = new Date(p.createdAt).getTime();
-				const hours = Math.max(0, (now - created) / 36e5);
-				// simple decay: score / (hours + 2)^1.5
-				p.hotScore = (p.score || 0) / Math.pow(hours + 2, 1.5);
-			});
-
-			candidates.sort((a, b) => (b.hotScore || 0) - (a.hotScore || 0));
-			const start = (page - 1) * limit;
-			const pageItems = candidates.slice(start, start + limit);
-			return res.json({ posts: pageItems, page, totalPages });
-		}
-
-		// top or new
-		let sortCriteria = { createdAt: -1 };
-		if (sortParam === 'top' || sortParam === 'best') sortCriteria = { score: -1, createdAt: -1 };
-		if (sortParam === 'new') sortCriteria = { createdAt: -1 };
-
-		const posts = await Post.find(filter)
-			.sort(sortCriteria)
-			.skip((page - 1) * limit)
-			.limit(limit)
-			.populate('author', 'username')
-			.populate('community', 'name title');
-
-		res.json({ posts, page, totalPages });
-	} catch (err) {
-		res.status(500).json({ error: err.message });
-	}
-});
-
-
-router.get('/:id', async (req, res) => {
-	try {
 		const post = await Post.findById(req.params.id).populate('author', 'username').populate('community', 'name title');
-		if (!post) return res.status(404).json({ error: 'Not found' });
-		res.json(post);
+
+		if (!post) return res.status(404).json({ success: false, data: null, error: 'Post not found' });
+
+		res.status(200).json({ success: true, data: post, error: null });
+
 	} catch (err) {
-		res.status(500).json({ error: err.message });
+
+		res.status(500).json({ success: false, data: null, error: err.message });
+
 	}
+
 });
+
+
+
+router.patch('/:id', auth, writeLimiter, validateObjectId('id'), async (req, res) => {
+  try {
+    const { id: postId } = req.params;
+    const userId = req.user._id;
+
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ success: false, data: null, error: 'Post not found' });
+
+    // Check if the user is the author
+    if (post.author.toString() !== userId.toString()) {
+      return res.status(403).json({ success: false, data: null, error: 'Unauthorized: You are not the author of this post' });
+    }
+
+    const updates = {};
+    const allowedUpdates = ['title', 'body', 'url'];
+    allowedUpdates.forEach((key) => {
+      if (req.body[key] !== undefined) {
+        updates[key] = req.body[key];
+      }
+    });
+
+    const updatedPost = await Post.findByIdAndUpdate(postId, updates, { new: true })
+      .populate('author', 'username')
+      .populate('community', 'name title');
+
+    res.status(200).json({ success: true, data: updatedPost, error: null });
+  } catch (err) {
+    res.status(500).json({ success: false, data: null, error: err.message });
+  }
+});
+
+// DELETE /api/posts/:id (auth required)
+
+router.delete('/:id', auth, writeLimiter, validateObjectId('id'), async (req, res) => {
+
+  try {
+
+    const { id: postId } = req.params;
+
+    const userId = req.user._id;
+
+
+
+    const post = await Post.findById(postId);
+
+    if (!post) return res.status(404).json({ success: false, data: null, error: 'Post not found' });
+
+
+
+    // Check if the user is the author
+
+    if (post.author.toString() !== userId.toString()) {
+
+      return res.status(403).json({ success: false, data: null, error: 'Unauthorized: You are not the author of this post' });
+
+    }
+
+
+
+    // Delete related votes
+
+    await Vote.deleteMany({ post: postId });
+
+
+
+    // Delete related saved posts
+
+    await SavedPost.deleteMany({ post: postId });
+
+
+
+    // Find and delete related comments (cascade delete for comment votes will be in comments.js)
+
+    // Using find and individual delete to potentially trigger pre-remove hooks if they exist in Comment model
+
+    const commentsToDelete = await Comment.find({ post: postId });
+
+    for (const comment of commentsToDelete) {
+
+      // This might be redundant if Comment.deleteMany works correctly with hooks, but ensures individual processing
+
+      await Comment.findByIdAndDelete(comment._id); 
+
+    }
+
+    // Fallback/direct delete if no hooks or for efficiency
+
+    await Comment.deleteMany({ post: postId }); 
+
+
+
+    // Delete the post itself
+
+    await Post.findByIdAndDelete(postId);
+
+
+
+    res.status(200).json({ success: true, data: null, error: null });
+
+  } catch (err) {
+
+    res.status(500).json({ success: false, data: null, error: err.message });
+
+  }
+
+});
+
+
+
+
+
+// POST /api/posts/:id/save (auth required)
+
+router.post('/:id/save', auth, writeLimiter, validateObjectId('id'), async (req, res) => {
+
+  try {
+
+    const { id: postId } = req.params;
+
+    const userId = req.user._id;
+
+
+
+    const post = await Post.findById(postId);
+
+    if (!post) return res.status(404).json({ success: false, data: null, error: 'Post not found' });
+
+
+
+    const existingSavedPost = await SavedPost.findOne({ user: userId, post: postId });
+
+    if (existingSavedPost) {
+
+      return res.status(200).json({ success: true, saved: true, error: null });
+
+    }
+
+
+
+    await SavedPost.create({ user: userId, post: postId });
+
+    res.status(200).json({ success: true, saved: true, error: null });
+
+  } catch (err) {
+
+    res.status(500).json({ success: false, data: null, error: err.message });
+
+  }
+
+});
+
+
+
+// DELETE /api/posts/:id/save (auth required)
+
+router.delete('/:id/save', auth, writeLimiter, validateObjectId('id'), async (req, res) => {
+
+  try {
+
+    const { id: postId } = req.params;
+
+    const userId = req.user._id;
+
+
+
+    const post = await Post.findById(postId);
+
+    if (!post) return res.status(404).json({ success: false, data: null, error: 'Post not found' });
+
+
+
+    const deletedSavedPost = await SavedPost.findOneAndDelete({ user: userId, post: postId });
+
+
+
+    if (!deletedSavedPost) {
+
+      return res.status(200).json({ success: true, saved: false, error: null });
+
+    }
+
+
+
+    res.status(200).json({ success: true, saved: false, error: null });
+
+  } catch (err) {
+
+    res.status(500).json({ success: false, data: null, error: err.message });
+
+  }
+
+});
+
+
 
 module.exports = router;

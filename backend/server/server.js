@@ -11,8 +11,12 @@ const communityRoutes = require('./routes/communities');
 const postRoutes = require('./routes/posts');
 const voteRoutes = require('./routes/votes');
 const commentRoutes = require('./routes/comments');
+const commentVoteRoutes = require('./routes/commentVotes');
 const userRoutes = require('./routes/users');
 const postsImageRoutes = require('./routes/postsImage');
+const notificationsRoutes = require('./routes/notifications');
+const searchRoutes = require('./routes/search');
+const messagesRoutes = require('./routes/messages'); // New import
 
 
 const app = express();
@@ -26,15 +30,24 @@ connectDB(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/reddit_clone');
 
 
 app.use('/api/auth', authLimiter, authRoutes);
-app.use('/api/communities', writeLimiter, communityRoutes);
-app.use('/api/posts', writeLimiter, postRoutes);
+app.use('/api/communities', communityRoutes);
+app.use('/api/posts', postRoutes);
 app.use('/api/posts', voteRoutes);
-app.use('/api/comments', writeLimiter, commentRoutes);
-app.use('/api/users', writeLimiter, userRoutes);
-app.use('/api/posts', writeLimiter, postsImageRoutes);
+app.use('/api/comments', commentRoutes);
+app.use('/api/comments', commentVoteRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/posts', postsImageRoutes);
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/search', searchRoutes);
+app.use('/api/messages', messagesRoutes); // New route
 
 
 app.get('/', (req, res) => res.json({ message: 'API running' }));
+
+// Fallback 404 handler
+app.use((req, res, next) => {
+  res.status(404).json({ success: false, data: null, error: 'Not Found' });
+});
 
 
 const PORT = process.env.PORT || 5000;

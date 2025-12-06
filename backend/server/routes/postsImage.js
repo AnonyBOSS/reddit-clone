@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/authMiddleware');
+const { writeLimiter } = require('../middleware/rateLimiter');
 const multer = require('multer');
 const { storage } = require('../utils/cloudinary');
 
@@ -15,7 +16,7 @@ const upload = multer({
 });
 
 // POST /api/posts/upload-image
-router.post('/upload-image', auth, upload.single('image'), async (req, res) => {
+router.post('/upload-image', auth, writeLimiter, upload.single('image'), async (req, res) => {
   try {
     if (!req.file || !req.file.path) return res.status(400).json({ error: 'No file uploaded' });
     const url = req.file.path;
