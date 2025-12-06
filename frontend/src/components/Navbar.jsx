@@ -5,21 +5,42 @@ import {
   PlusIcon,
   Bars3Icon,
 } from "@heroicons/react/24/outline";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import logo from "../assets/reddit-logo.png";
 import ProfileMenu from "./ProfileMenu";
 import { Link } from "react-router-dom";
 import ChatSidebar from "./ChatSidebar";
+import api from "../api/axios";
+
 export default function Navbar({ onToggleSidebar }) {
   const [open, setOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+
+  const userRaw = JSON.parse(localStorage.getItem("user"));
+  const username = userRaw?.username;
+
+  // ⬅️ React state for avatar (starts with default)
+  const [userAvatar, setUserAvatar] = useState("/default-avatar.png");
+
+  // ⬅️ CORRECT: Fetch avatar after component renders
+  useEffect(() => {
+    if (!username) return;
+
+    api
+      .get(`/users/${username}`)
+      .then((res) => {
+        const avatar = res.data?.data?.avatar;
+        if (avatar) setUserAvatar(avatar);
+      })
+      .catch((err) => console.error(err));
+  }, [username]);
 
   return (
     <>
       <nav className="w-full h-16 bg-reddit-card dark:bg-reddit-dark_card border-b border-reddit-border dark:border-reddit-dark_divider px-5 flex items-center justify-between sticky top-0 z-50">
         {/* Left Section */}
         <div className="flex items-center gap-3">
-          {/* Mobile menu button (visible < lg) */}
+
           <button
             type="button"
             onClick={onToggleSidebar}
@@ -29,7 +50,6 @@ export default function Navbar({ onToggleSidebar }) {
             <Bars3Icon className="h-5 w-5" />
           </button>
 
-          {/* Logo + text */}
           <Link to="/" className="flex items-center gap-2 cursor-pointer select-none">
             <img src={logo} alt="Reddit" className="h-8" />
             <span className="font-bold text-3xl text-reddit-text dark:text-reddit-dark_text">
@@ -38,7 +58,7 @@ export default function Navbar({ onToggleSidebar }) {
           </Link>
         </div>
 
-        {/* Search Bar */}
+        {/* Search */}
         <div className="flex-1 flex justify-center px-4">
           <div className="w-full max-w-xl relative">
             <MagnifyingGlassIcon className="absolute left-3 top-2 h-5 w-5 text-reddit-icon dark:text-reddit-dark_icon" />
@@ -54,35 +74,30 @@ export default function Navbar({ onToggleSidebar }) {
         <div className="flex items-center gap-4">
           {/* Chat */}
           <div className="relative group">
-            <ChatBubbleOvalLeftIcon className="h-7 w-7 text-reddit-icon dark:text-reddit-dark_icon p-1 rounded-full cursor-pointer transition hover:bg-reddit-hover dark:hover:bg-reddit-dark_hover"
-            onClick={() => setChatOpen(true)} />
-            <span className="tooltip">Chat</span>
+            <ChatBubbleOvalLeftIcon
+              className="h-7 w-7 text-reddit-icon dark:text-reddit-dark_icon p-1 rounded-full cursor-pointer transition hover:bg-reddit-hover dark:hover:bg-reddit-dark_hover"
+              onClick={() => setChatOpen(true)}
+            />
             <ChatSidebar open={chatOpen} onClose={() => setChatOpen(false)} />
           </div>
 
-        {/* Create Button */}
-        <div
-          className="
-            group relative flex items-center gap-2
-            px-3 py-1.5 rounded-full cursor-pointer transition
-            hover:bg-reddit-hover dark:hover:bg-reddit-dark_hover
-          "
-        >
-          <PlusIcon className="h-5 w-5 text-reddit-icon dark:text-reddit-dark_icon" />
-          <span className="text-sm font-medium text-reddit-text dark:text-reddit-dark_text">
-            Create
-          </span>
-        </div>
+          {/* Create */}
+          <div className="group relative flex items-center gap-2 px-3 py-1.5 rounded-full cursor-pointer transition hover:bg-reddit-hover dark:hover:bg-reddit-dark_hover">
+            <PlusIcon className="h-5 w-5 text-reddit-icon dark:text-reddit-dark_icon" />
+            <span className="text-sm font-medium text-reddit-text dark:text-reddit-dark_text">
+              Create
+            </span>
+          </div>
+
           {/* Notifications */}
           <div className="relative group">
             <BellIcon className="h-7 w-7 text-reddit-icon dark:text-reddit-dark_icon p-1 rounded-full cursor-pointer transition hover:bg-reddit-hover dark:hover:bg-reddit-dark_hover" />
-            <span className="tooltip">Notifications</span>
           </div>
 
           {/* Profile */}
           <div className="relative">
             <img
-              src="https://www.redditstatic.com/avatars/avatar_default_07_FF66AC.png"
+              src={userAvatar}
               alt="user"
               className="h-8 w-8 rounded-full cursor-pointer"
               onClick={() => setOpen(!open)}
