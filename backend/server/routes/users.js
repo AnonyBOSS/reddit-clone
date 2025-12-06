@@ -220,4 +220,56 @@ router.get('/:username', async (req, res) => {
 });
 
 
+
+
+// FOLLOW a user ➜ POST /api/users/:username/follow
+router.post('/:username/follow', auth, async (req, res) => {
+  try {
+    const userToFollow = await User.findOne({ username: req.params.username });
+    if (!userToFollow) return res.status(404).json({ error: "User not found" });
+
+    if (userToFollow._id.toString() === req.user._id.toString()) {
+      return res.status(400).json({ error: "You can't follow yourself" });
+    }
+
+    const existing = await Follow.findOne({ 
+      follower: req.user._id, 
+      following: userToFollow._id 
+    });
+
+    if (existing) {
+      return res.status(200).json({ success: true, following: true });
+    }
+
+    await Follow.create({
+      follower: req.user._id,
+      following: userToFollow._id
+    });
+
+    res.json({ success: true, following: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// UNFOLLOW a user ➜ DELETE /api/users/:username/follow
+router.delete('/:username/follow', auth, async (req, res) => {
+  try {
+    const userToUnfollow = await User.findOne({ username: req.params.username });
+    if (!userToUnfollow) return res.status(404).json({ error: "User not found" });
+
+    await Follow.deleteOne({
+      follower: req.user._id,
+      following: userToUnfollow._id
+    });
+
+    res.json({ success: true, following: false });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 module.exports = router;
+
+

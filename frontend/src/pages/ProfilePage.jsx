@@ -11,8 +11,10 @@ import SortMenu from "../components/SortMenu";
  * Right-hand profile info card
  * Accepts a `profile` object with safe defaults.
  */
-function ProfileCard({ profile, onFollowToggle, isFollowing }) {
+function ProfileCard({ profile, onFollowToggle, isFollowing, loggedInUser }) {
   if (!profile) return null;
+
+  const isOwnProfile = loggedInUser?._id === profile._id;
 
   return (
     <div className="bg-reddit-card dark:bg-reddit-dark_card border border-reddit-border dark:border-reddit-dark_divider rounded-2xl p-4 shadow-sm">
@@ -26,18 +28,28 @@ function ProfileCard({ profile, onFollowToggle, isFollowing }) {
             u/{profile.username}
           </p>
         </div>
-        <button className="text-lg text-reddit-icon dark:text-reddit-dark_icon leading-none">•••</button>
+        <button className="text-lg text-reddit-icon dark:text-reddit-dark_icon leading-none">
+          •••
+        </button>
       </div>
 
-      {/* Follow button */}
-      <button
-        onClick={onFollowToggle}
-        className={`w-full mb-4 py-1.5 rounded-full ${
-          isFollowing ? "bg-transparent border border-reddit-border text-reddit-text" : "bg-reddit-blue text-white"
-        } text-[13px] font-semibold`}
-      >
-        {isFollowing ? "Following" : "Follow"}
-      </button>
+      {/* Follow / Edit Button */}
+      {isOwnProfile ? (
+        <button className="w-full mb-4 py-1.5 rounded-full bg-reddit-hover dark:bg-reddit-dark_hover text-[13px] font-semibold">
+          Edit Profile
+        </button>
+      ) : (
+        <button
+          onClick={onFollowToggle}
+          className={`w-full mb-4 py-1.5 rounded-full ${
+            isFollowing
+              ? "bg-transparent border border-reddit-border text-reddit-text"
+              : "bg-reddit-blue text-white"
+          } text-[13px] font-semibold`}
+        >
+          {isFollowing ? "Following" : "Follow"}
+        </button>
+      )}
 
       {/* Stats row */}
       <div className="flex justify-between text-xs text-reddit-text_light dark:text-reddit-dark_text_light">
@@ -45,19 +57,25 @@ function ProfileCard({ profile, onFollowToggle, isFollowing }) {
           <div className="font-semibold text-reddit-text dark:text-reddit-dark_text">
             {profile.followersCount ?? 0}
           </div>
-          <div className="text-reddit-text_secondary dark:text-reddit-dark_text_secondary">Followers</div>
+          <div className="text-reddit-text_secondary dark:text-reddit-dark_text_secondary">
+            Followers
+          </div>
         </div>
         <div>
           <div className="font-semibold text-reddit-text dark:text-reddit-dark_text">
             {(profile.karma ?? 0).toLocaleString()}
           </div>
-          <div className="text-reddit-text_secondary dark:text-reddit-dark_text_secondary">Karma</div>
+          <div className="text-reddit-text_secondary dark:text-reddit-dark_text_secondary">
+            Karma
+          </div>
         </div>
         <div>
           <div className="font-semibold text-reddit-text dark:text-reddit-dark_text">
             {profile.contributions ?? 0}
           </div>
-          <div className="text-reddit-text_secondary dark:text-reddit-dark_text_secondary">Contributions</div>
+          <div className="text-reddit-text_secondary dark:text-reddit-dark_text_secondary">
+            Contributions
+          </div>
         </div>
       </div>
 
@@ -81,13 +99,18 @@ function ProfileCard({ profile, onFollowToggle, isFollowing }) {
         {profile.moderatedCommunities?.length ? (
           <div className="space-y-2">
             {profile.moderatedCommunities.map((c) => (
-              <div key={c._id || c.name} className="flex items-center justify-between text-xs">
+              <div
+                key={c._id || c.name}
+                className="flex items-center justify-between text-xs"
+              >
                 <div className="flex items-center gap-2">
                   <div className="h-7 w-7 rounded-full bg-reddit-hover dark:bg-reddit-dark_hover flex items-center justify-center text-[11px]">
                     r/
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-reddit-text dark:text-reddit-dark_text">{c.name}</span>
+                    <span className="text-reddit-text dark:text-reddit-dark_text">
+                      {c.name}
+                    </span>
                     <span className="text-reddit-text_secondary dark:text-reddit-dark_text_secondary">
                       {c.membersCount ?? c.members ?? "—"} members
                     </span>
@@ -100,7 +123,9 @@ function ProfileCard({ profile, onFollowToggle, isFollowing }) {
             ))}
           </div>
         ) : (
-          <p className="text-xs text-reddit-text_secondary dark:text-reddit-dark_text_secondary">No moderated communities</p>
+          <p className="text-xs text-reddit-text_secondary dark:text-reddit-dark_text_secondary">
+            No moderated communities
+          </p>
         )}
       </div>
     </div>
@@ -129,6 +154,20 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [loggedInUser, setLoggedInUser] = useState(null);
+
+  // load logged-in user (if any) to compare for Follow/Edit logic
+  useEffect(() => {
+    async function loadMe() {
+      try {
+        const res = await api.get("/users/me");
+        setLoggedInUser(res.data.data);
+      } catch (e) {
+        setLoggedInUser(null); // guest / logged out
+      }
+    }
+    loadMe();
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -144,11 +183,16 @@ export default function ProfilePage() {
 
         // compute derived properties safely
         const createdAt = data?.createdAt ? new Date(data.createdAt) : null;
-        const redditAgeYears = createdAt ? Math.floor((Date.now() - createdAt) / (365 * 24 * 60 * 60 * 1000)) : 0;
+        const redditAgeYears = createdAt
+          ? Math.floor((Date.now() - createdAt) / (365 * 24 * 60 * 60 * 1000))
+          : 0;
         const followersCount = data?.followersCount ?? data?.followers ?? 0;
         const karma = data?.karma ?? 0;
         const commentCount = data?.commentCount ?? data?.commentsCount ?? 0;
-        const postCount = (data?.posts && Array.isArray(data.posts)) ? data.posts.length : (data?.postCount ?? 0);
+        const postCount =
+          data?.posts && Array.isArray(data.posts)
+            ? data.posts.length
+            : data?.postCount ?? 0;
         const contributions = commentCount + postCount;
 
         setProfile({
@@ -169,7 +213,9 @@ export default function ProfilePage() {
       } catch (err) {
         console.error("Profile load error:", err);
         if (!mounted) return;
-        setError(err.response?.data?.error || err.message || "Failed to load profile");
+        setError(
+          err.response?.data?.error || err.message || "Failed to load profile"
+        );
       } finally {
         if (mounted) setLoading(false);
       }
@@ -204,16 +250,14 @@ export default function ProfilePage() {
     );
 
   if (error)
-    return (
-      <div className="pt-10 text-center text-red-500">
-        Error: {error}
-      </div>
-    );
+    return <div className="pt-10 text-center text-red-500">Error: {error}</div>;
 
   // safe sorted posts
   const sortedPosts = Array.isArray(posts)
     ? [...posts].sort((a, b) =>
-        sort === "top" || sort === "best" ? getPostScore(b) - getPostScore(a) : 0
+        sort === "top" || sort === "best"
+          ? getPostScore(b) - getPostScore(a)
+          : 0
       )
     : [];
 
@@ -225,7 +269,11 @@ export default function ProfilePage() {
           {/* header: avatar + name */}
           <div className="flex items-center gap-4 mb-4">
             <div className="h-20 w-20 rounded-full overflow-hidden bg-reddit-hover dark:bg-reddit-dark_hover flex-shrink-0">
-              <img src={profile.avatar || "/default-avatar.png"} alt={profile.username} className="h-full w-full object-cover" />
+              <img
+                src={profile.avatar || "/default-avatar.png"}
+                alt={profile.username}
+                className="h-full w-full object-cover"
+              />
             </div>
             <div>
               <h1 className="text-2xl font-semibold text-reddit-text dark:text-reddit-dark_text">
@@ -249,7 +297,11 @@ export default function ProfilePage() {
                     : "text-reddit-text_secondary dark:text-reddit-dark_text_secondary hover:bg-reddit-hover dark:hover:bg-reddit-dark_hover"
                 }`}
               >
-                {tab === "overview" ? "Overview" : tab === "posts" ? "Posts" : "Comments"}
+                {tab === "overview"
+                  ? "Overview"
+                  : tab === "posts"
+                  ? "Posts"
+                  : "Comments"}
               </button>
             ))}
           </div>
@@ -263,35 +315,48 @@ export default function ProfilePage() {
           {activeTab === "posts" && (
             <div className="space-y-4">
               {sortedPosts.length === 0 ? (
-                <div className="text-sm text-reddit-text_secondary">No posts yet.</div>
+                <div className="text-sm text-reddit-text_secondary">
+                  No posts yet.
+                </div>
               ) : (
-               sortedPosts.map((post) => (
-  <PostCard key={post._id} post={post} />
-))
-
+                sortedPosts.map((post) => (
+                  <PostCard key={post._id} post={post} />
+                ))
               )}
             </div>
           )}
 
           {activeTab === "overview" && (
             <div>
-              <p className="text-sm text-reddit-text_secondary mb-4">Overview</p>
+              <p className="text-sm text-reddit-text_secondary mb-4">
+                Overview
+              </p>
 
               {/* Example: show recent comments if any */}
               {comments.length ? (
                 <>
-                  <CommentReplyBox topLevel onReply={() => {}} onCancel={() => {}} />
+                  <CommentReplyBox
+                    topLevel
+                    onReply={() => {}}
+                    onCancel={() => {}}
+                  />
                   <CommentsList comments={comments} />
                 </>
               ) : (
-                <p className="text-sm text-reddit-text_secondary">No recent comments to show.</p>
+                <p className="text-sm text-reddit-text_secondary">
+                  No recent comments to show.
+                </p>
               )}
             </div>
           )}
 
           {activeTab === "comments" && (
             <div>
-              <CommentReplyBox topLevel onReply={() => {}} onCancel={() => {}} />
+              <CommentReplyBox
+                topLevel
+                onReply={() => {}}
+                onCancel={() => {}}
+              />
               <CommentsList comments={comments} />
             </div>
           )}
@@ -299,7 +364,12 @@ export default function ProfilePage() {
 
         {/* RIGHT SIDEBAR */}
         <aside className="w-full lg:w-80">
-          <ProfileCard profile={profile} onFollowToggle={handleFollowToggle} isFollowing={isFollowing} />
+          <ProfileCard
+            profile={profile}
+            onFollowToggle={handleFollowToggle}
+            isFollowing={isFollowing}
+            loggedInUser={loggedInUser}
+          />
         </aside>
       </div>
     </div>
