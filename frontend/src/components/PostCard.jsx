@@ -3,111 +3,164 @@ import {
   ShareIcon,
   EllipsisHorizontalIcon,
 } from "@heroicons/react/24/outline";
+import { Link, useNavigate } from "react-router-dom";
 import VoteButtons from "./VoteButtons";
-import { useNavigate, Link } from "react-router-dom";
 
 export default function PostCard({ post }) {
   const navigate = useNavigate();
 
-  const score = post?.score ?? 0;
-  const comments = post?.commentsCount ?? 0;
-  const communityName = post?.community?.name ?? "unknown";
-  const authorName = post?.author?.username ?? "user";
-  const createdAgo = new Date(post.createdAt).toLocaleDateString(); // you can improve this
+  if (!post || typeof post !== "object") return null;
+
+  // Extract post fields safely
+  const id = post._id;
+  const title = post.title ?? "";
+  const body = post.body ?? "";
+  const score = Number(post.score ?? post.votes ?? 0);
+  const commentsCount = post.commentsCount ?? post.commentCount ?? 0;
+
+  const community = post.community?.name ?? "unknown";
+  const communityAvatar =
+    post.community?.avatar ??
+    "https://www.redditstatic.com/avatars/avatar_default_02_46D160.png";
+
+  const author = post.author?.username ?? "user";
+
+  // Format createdAt → short date like "Jan 5"
+  const createdAgo = post.createdAt
+    ? new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        day: "numeric",
+      }).format(new Date(post.createdAt))
+    : "recently";
 
   return (
     <div
-      onClick={() => navigate(`/post/${post._id}`)}
       className="
         w-full max-w-[740px]
         bg-reddit-card dark:bg-reddit-dark_card
         rounded-xl p-4
         border border-reddit-border dark:border-reddit-dark_divider
-        shadow-sm cursor-pointer
+        shadow-sm
       "
     >
       {/* HEADER */}
       <div className="flex items-center justify-between text-[13px]">
 
+        {/* LEFT */}
         <div className="flex items-center gap-2 text-reddit-text_secondary dark:text-reddit-dark_text_secondary">
 
-          {/* Subreddit */}
+          {/* Community Icon */}
           <Link
-            to={`/r/${communityName}`}
+            to={`/r/${community}`}
             onClick={(e) => e.stopPropagation()}
-            className="text-sm font-semibold hover:underline text-reddit-text dark:text-reddit-dark_text"
+            className="h-6 w-6"
           >
-            r/{communityName}
+            <img src={communityAvatar} className="h-full w-full rounded-full" />
+          </Link>
+
+          {/* Community Name */}
+          <Link
+            to={`/r/${community}`}
+            onClick={(e) => e.stopPropagation()}
+            className="text-sm font-semibold text-reddit-text dark:text-reddit-dark_text hover:underline"
+          >
+            r/{community}
           </Link>
 
           <span>•</span>
-          <span>Posted by u/{authorName}</span>
+
+          {/* Author */}
+          <Link
+            to={`/u/${author}`}
+            onClick={(e) => e.stopPropagation()}
+            className="truncate max-w-[120px] hover:underline"
+          >
+            u/{author}
+          </Link>
+
           <span>•</span>
           <span>{createdAgo}</span>
         </div>
 
-        <button
-          onClick={(e) => e.stopPropagation()}
-          className="p-1 rounded-full"
-        >
-          <EllipsisHorizontalIcon className="h-6 w-6 text-reddit-icon dark:text-reddit-dark_icon" />
-        </button>
+        {/* RIGHT BUTTONS */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => e.stopPropagation()}
+            className="bg-reddit-blue hover:bg-reddit-blue_hover text-white text-xs font-semibold px-3 py-1 rounded-full"
+          >
+            Join
+          </button>
+          <button
+            onClick={(e) => e.stopPropagation()}
+            className="p-1 rounded-full"
+          >
+            <EllipsisHorizontalIcon className="h-5 w-5 text-reddit-icon dark:text-reddit-dark_icon" />
+          </button>
+        </div>
+
       </div>
 
       {/* TITLE */}
-      <h2 className="mt-2 text-[20px] font-semibold text-reddit-text dark:text-reddit-dark_text leading-6">
-        {post.title}
+      <h2
+        className="mt-2 text-[18px] font-semibold text-reddit-text dark:text-reddit-dark_text leading-6 cursor-pointer hover:underline"
+        onClick={() => navigate(`/post/${id}`)}
+      >
+        {title}
       </h2>
 
       {/* BODY */}
-      {post.body && (
+      {body && (
         <p className="mt-1 text-[15px] text-reddit-text_light dark:text-reddit-dark_text_light">
-          {post.body}
+          {body}
         </p>
       )}
 
       {/* ACTION BAR */}
       <div className="flex items-center gap-4 mt-3">
 
-        {/* VOTES */}
+        {/* Votes */}
         <div onClick={(e) => e.stopPropagation()}>
-          <VoteButtons initial={score} />
+          <VoteButtons initial={score} postId={id} />
         </div>
 
-        {/* COMMENTS */}
+        {/* Comments Button */}
         <div
-          onClick={(e) => e.stopPropagation()}
           className="
             flex items-center gap-1
             bg-reddit-hover dark:bg-reddit-dark_hover
             px-3 py-[6px] rounded-full
-            text-sm cursor-pointer
-            text-reddit-text_secondary dark:text-reddit-dark_text_secondary
-            hover:bg-reddit-hover dark:hover:bg-reddit-dark_hover
+            text-sm text-reddit-text_secondary dark:text-reddit-dark_text_secondary
+            cursor-pointer hover:bg-reddit-hover dark:hover:bg-reddit-dark_hover
           "
-        >
-          <ChatBubbleBottomCenterTextIcon className="h-4 w-4" />
-          <span>{comments}</span>
-        </div>
-
-        {/* SHARE */}
-        <div
           onClick={(e) => {
             e.stopPropagation();
-            navigator.clipboard.writeText(window.location.origin + `/post/${post._id}`);
+            navigate(`/post/${id}`);
           }}
+        >
+          <ChatBubbleBottomCenterTextIcon className="h-4 w-4 text-reddit-icon" />
+          <span>{commentsCount}</span>
+        </div>
+
+        {/* Share Button */}
+        <div
           className="
             flex items-center gap-1
             bg-reddit-hover dark:bg-reddit-dark_hover
             px-3 py-[6px] rounded-full
-            text-sm cursor-pointer
-            text-reddit-text_secondary dark:text-reddit-dark_text_secondary
-            hover:bg-reddit-hover dark:hover:bg-reddit-dark_hover
+            text-sm text-reddit-text_secondary dark:text-reddit-dark_text_secondary
+            cursor-pointer hover:bg-reddit-hover dark:hover:bg-reddit-dark_hover
           "
+          onClick={(e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText(
+              `${window.location.origin}/post/${id}`
+            );
+          }}
         >
-          <ShareIcon className="h-4 w-4" />
+          <ShareIcon className="h-4 w-4 text-reddit-icon" />
           <span>Share</span>
         </div>
+
       </div>
     </div>
   );

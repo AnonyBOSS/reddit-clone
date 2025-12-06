@@ -265,7 +265,10 @@ export default function ProfilePage() {
               {sortedPosts.length === 0 ? (
                 <div className="text-sm text-reddit-text_secondary">No posts yet.</div>
               ) : (
-                sortedPosts.map((post) => <PostCard key={post._id || post.id} {...post} />)
+               sortedPosts.map((post) => (
+  <PostCard key={post._id} post={post} />
+))
+
               )}
             </div>
           )}
