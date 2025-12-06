@@ -3,12 +3,68 @@ const router = express.Router();
 const validateObjectId = require('../middleware/validateObjectId');
 const auth = require('../middleware/authMiddleware');
 const { writeLimiter } = require('../middleware/rateLimiter');
+const Community = require('../models/Community');
+const Post = require('../models/Post');
+const Vote = require('../models/Vote');
+const Comment = require('../models/Comment');
+const SavedPost = require('../models/SavedPost');
 
 
 
 
 // ... (rest of the file)
 
+// POST /api/posts - Create a new post
+router.post('/', auth, writeLimiter, async (req, res) => {
+  try {
+    const { title, body, communityName, url } = req.body;
+    const author = req.user._id;
+
+    if (!title || !communityName) {
+      return res.status(400).json({
+        success: false,
+        data: null,
+        error: 'Title and communityName are required'
+      });
+    }
+
+    // Find community by name
+    const community = await Community.findOne({ name: communityName });
+    if (!community) {
+      return res.status(404).json({
+        success: false,
+        data: null,
+        error: 'Community not found'
+      });
+    }
+
+    // Create post
+    const post = await Post.create({
+      title,
+      body: body || '',
+      author,
+      community: community._id,
+      url: url || null,
+    });
+
+    const populatedPost = await Post.findById(post._id)
+      .populate('author', 'username')
+      .populate('community', 'name title');
+
+    return res.status(201).json({
+      success: true,
+      data: populatedPost,
+      error: null
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      data: null,
+      error: err.message
+    });
+  }
+});
 
 
 router.get('/:id', validateObjectId('id'), async (req, res) => {
