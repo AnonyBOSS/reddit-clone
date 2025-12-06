@@ -1,20 +1,29 @@
 // src/pages/ProfilePage.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "react-router-dom";
 import api from "../api/axios"; // your configured axios instance
 import PostCard from "../components/PostCard";
 import CommentsList from "../components/CommentsList";
 import CommentReplyBox from "../components/CommentReplyBox";
 import SortMenu from "../components/SortMenu";
+import EditProfileModal from "../components/EditProfileModal";
 
 /**
  * Right-hand profile info card
  * Accepts a `profile` object with safe defaults.
  */
-function ProfileCard({ profile, onFollowToggle, isFollowing, loggedInUser }) {
+function ProfileCard({
+  profile,
+  onFollowToggle,
+  isFollowing,
+  followLoading,
+  loggedInUser,
+  onEdit,
+}) {
   if (!profile) return null;
 
   const isOwnProfile = loggedInUser?._id === profile._id;
+  const [hover, setHover] = useState(false);
 
   return (
     <div className="bg-reddit-card dark:bg-reddit-dark_card border border-reddit-border dark:border-reddit-dark_divider rounded-2xl p-4 shadow-sm">
@@ -35,19 +44,31 @@ function ProfileCard({ profile, onFollowToggle, isFollowing, loggedInUser }) {
 
       {/* Follow / Edit Button */}
       {isOwnProfile ? (
-        <button className="w-full mb-4 py-1.5 rounded-full bg-reddit-hover dark:bg-reddit-dark_hover text-[13px] font-semibold">
+        <button
+          className="w-full mb-4 py-1.5 rounded-full bg-reddit-hover dark:bg-reddit-dark_hover text-[13px] font-semibold focus:outline-none focus:ring-0"
+          onClick={onEdit}
+        >
           Edit Profile
         </button>
       ) : (
         <button
           onClick={onFollowToggle}
-          className={`w-full mb-4 py-1.5 rounded-full ${
-            isFollowing
-              ? "bg-transparent border border-reddit-border text-reddit-text"
+          onMouseEnter={() => setHover(true)}
+          onMouseLeave={() => setHover(false)}
+          onFocus={() => setHover(true)}    // keyboard focus behaves like hover
+          onBlur={() => setHover(false)}
+          disabled={followLoading}
+          aria-pressed={isFollowing}
+          aria-label={isFollowing ? "Following (press to unfollow)" : "Follow"}
+          className={`w-full mb-4 py-1.5 rounded-full transition text-[13px] font-semibold focus:outline-none focus:ring-0 ${
+            followLoading
+              ? "opacity-60 cursor-not-allowed"
+              : isFollowing
+              ? "bg-transparent border border-reddit-border text-reddit-text dark:text-white hover:bg-reddit-hover dark:hover:bg-reddit-dark_hover"
               : "bg-reddit-blue text-white"
-          } text-[13px] font-semibold`}
+          }`}
         >
-          {isFollowing ? "Following" : "Follow"}
+          {isFollowing ? (hover ? "Unfollow" : "Following") : "Follow"}
         </button>
       )}
 
@@ -136,7 +157,6 @@ function ProfileCard({ profile, onFollowToggle, isFollowing, loggedInUser }) {
  * Helper: safe numeric getter for sorting -- checks several possible fields
  */
 function getPostScore(post) {
-  // prefer `score`, then `votes`, then fallback 0
   if (!post) return 0;
   return Number(post.score ?? post.votes ?? post.upvotes ?? 0);
 }
@@ -146,42 +166,59 @@ function getPostScore(post) {
  */
 export default function ProfilePage() {
   const { username } = useParams();
-  const [profile, setProfile] = useState(null); // full user profile data from backend
-  const [posts, setPosts] = useState([]); // posts created by user
-  const [comments, setComments] = useState([]); // optionally recent comments
-  const [activeTab, setActiveTab] = useState("overview"); // "overview" | "posts" | "comments"
-  const [sort, setSort] = useState("best"); // sorting for posts
+  const [profile, setProfile] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [sort, setSort] = useState("best");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
   const [loggedInUser, setLoggedInUser] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
 
-  // load logged-in user (if any) to compare for Follow/Edit logic
+  // prevent race: track mounted and in-flight follow
+  const mountedRef = useRef(true);
+  const followInFlightRef = useRef(false);
+
+  // Load logged-in user
   useEffect(() => {
-    async function loadMe() {
-      try {
-        const res = await api.get("/users/me");
+    mountedRef.current = true;
+    api
+      .get("/users/me")
+      .then((res) => {
+        if (!mountedRef.current) return;
         setLoggedInUser(res.data.data);
-      } catch (e) {
-        setLoggedInUser(null); // guest / logged out
-      }
-    }
-    loadMe();
+      })
+      .catch(() => {
+        if (!mountedRef.current) return;
+        setLoggedInUser(null);
+      });
+
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
+  // Helper: fetch profile raw data from server
+  async function fetchProfileData() {
+    const res = await api.get(`/users/${encodeURIComponent(username)}`);
+    return res.data?.data;
+  }
+
+  // Load profile on mount / username change
   useEffect(() => {
-    let mounted = true;
+    mountedRef.current = true;
     setLoading(true);
     setError(null);
 
-    async function loadProfile() {
+    (async () => {
       try {
-        const res = await api.get(`/users/${encodeURIComponent(username)}`);
-        const data = res.data?.data;
+        const data = await fetchProfileData();
 
-        if (!mounted) return;
+        if (!mountedRef.current) return;
 
-        // compute derived properties safely
         const createdAt = data?.createdAt ? new Date(data.createdAt) : null;
         const redditAgeYears = createdAt
           ? Math.floor((Date.now() - createdAt) / (365 * 24 * 60 * 60 * 1000))
@@ -195,6 +232,7 @@ export default function ProfilePage() {
             : data?.postCount ?? 0;
         const contributions = commentCount + postCount;
 
+        // update profile + derived fields
         setProfile({
           ...data,
           redditAgeYears,
@@ -202,44 +240,81 @@ export default function ProfilePage() {
           karma,
           contributions,
           moderatedCommunities: data?.moderatedCommunities ?? [],
+          isFollowing: data?.isFollowing ?? false,
         });
 
-        // posts: backend may return data.posts
-        const postsArray = Array.isArray(data?.posts) ? data.posts : [];
-        setPosts(postsArray);
+        // sync local following state
+        setIsFollowing(data?.isFollowing ?? false);
 
-        // optionally, if backend returns recent comments, setComments. otherwise empty array
+        setPosts(Array.isArray(data?.posts) ? data.posts : []);
         setComments(Array.isArray(data?.comments) ? data.comments : []);
       } catch (err) {
-        console.error("Profile load error:", err);
-        if (!mounted) return;
-        setError(
-          err.response?.data?.error || err.message || "Failed to load profile"
-        );
+        if (!mountedRef.current) return;
+        setError(err.response?.data?.error || err.message);
       } finally {
-        if (mounted) setLoading(false);
+        if (mountedRef.current) setLoading(false);
       }
-    }
+    })();
 
-    loadProfile();
     return () => {
-      mounted = false;
+      mountedRef.current = false;
     };
   }, [username]);
 
-  // Follow toggle (optimistic). Uncomment API call if backend route exists.
+  // Follow toggle — optimized, safe, updates followers count & button state
   const handleFollowToggle = async () => {
-    // optimistic UI change
-    setIsFollowing((prev) => !prev);
+    if (!profile || followLoading) return;
 
-    // OPTIONAL: if you have an endpoint like POST /api/users/:username/follow
-    // try {
-    //   await api.post(`/users/${username}/follow`);
-    // } catch (err) {
-    //   console.error('Follow API failed', err);
-    //   // revert optimistic change on failure
-    //   setIsFollowing(prev => !prev);
-    // }
+    // prevent double in-flight requests
+    if (followInFlightRef.current) return;
+    followInFlightRef.current = true;
+    setFollowLoading(true);
+
+    const currentlyFollowing = isFollowing; // snapshot
+
+    // Optimistically update UI: flip button + update follower count
+    setIsFollowing(!currentlyFollowing);
+    setProfile((prev) => {
+      const prevCount = Number(prev?.followersCount ?? 0);
+      const nextCount = currentlyFollowing ? Math.max(0, prevCount - 1) : prevCount + 1;
+      return { ...prev, followersCount: nextCount, isFollowing: !currentlyFollowing };
+    });
+
+    try {
+      if (currentlyFollowing) {
+        // unfollow
+        await api.delete(`/users/${profile.username}/follow`);
+      } else {
+        // follow
+        await api.post(`/users/${profile.username}/follow`);
+      }
+
+      // After server success, fetch authoritative values (followersCount/isFollowing)
+      // This prevents drift if other clients changed counts
+      const updated = await fetchProfileData();
+      if (mountedRef.current && updated) {
+        setProfile((prev) => ({
+          ...prev,
+          followersCount: updated.followersCount ?? prev.followersCount,
+          isFollowing: updated.isFollowing ?? prev.isFollowing,
+        }));
+        setIsFollowing(updated.isFollowing ?? false);
+      }
+    } catch (err) {
+      console.error("Follow toggle failed", err);
+
+      // revert optimistic changes on error
+      if (mountedRef.current) {
+        setIsFollowing(currentlyFollowing);
+        setProfile((prev) => ({
+          ...prev,
+          followersCount: Number(prev?.followersCount ?? 0) + (currentlyFollowing ? 1 : -1) * -1, // revert
+        }));
+      }
+    } finally {
+      followInFlightRef.current = false;
+      if (mountedRef.current) setFollowLoading(false);
+    }
   };
 
   if (loading)
@@ -252,21 +327,16 @@ export default function ProfilePage() {
   if (error)
     return <div className="pt-10 text-center text-red-500">Error: {error}</div>;
 
-  // safe sorted posts
   const sortedPosts = Array.isArray(posts)
     ? [...posts].sort((a, b) =>
-        sort === "top" || sort === "best"
-          ? getPostScore(b) - getPostScore(a)
-          : 0
+        sort === "top" || sort === "best" ? getPostScore(b) - getPostScore(a) : 0
       )
     : [];
 
   return (
     <div className="w-full flex justify-center">
       <div className="w-full max-w-6xl px-4 md:px-6 pt-6 pb-10 flex flex-col lg:flex-row gap-6">
-        {/* CENTER: posts/comments content */}
         <section className="flex-1 lg:flex-[2]">
-          {/* header: avatar + name */}
           <div className="flex items-center gap-4 mb-4">
             <div className="h-20 w-20 rounded-full overflow-hidden bg-reddit-hover dark:bg-reddit-dark_hover flex-shrink-0">
               <img
@@ -285,7 +355,6 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Tabs */}
           <div className="flex gap-2 mb-4">
             {["overview", "posts", "comments"].map((tab) => (
               <button
@@ -306,57 +375,37 @@ export default function ProfilePage() {
             ))}
           </div>
 
-          {/* Sort + controls */}
           <div className="flex items-center gap-3 mb-4">
             <SortMenu value={sort} onChange={setSort} />
           </div>
 
-          {/* Tab content */}
           {activeTab === "posts" && (
             <div className="space-y-4">
               {sortedPosts.length === 0 ? (
-                <div className="text-sm text-reddit-text_secondary">
-                  No posts yet.
-                </div>
+                <div className="text-sm text-reddit-text_secondary">No posts yet.</div>
               ) : (
-                sortedPosts.map((post) => (
-                  <PostCard key={post._id} post={post} />
-                ))
+                sortedPosts.map((post) => <PostCard key={post._id} post={post} />)
               )}
             </div>
           )}
 
           {activeTab === "overview" && (
             <div>
-              <p className="text-sm text-reddit-text_secondary mb-4">
-                Overview
-              </p>
-
-              {/* Example: show recent comments if any */}
+              <p className="text-sm text-reddit-text_secondary mb-4">Overview</p>
               {comments.length ? (
                 <>
-                  <CommentReplyBox
-                    topLevel
-                    onReply={() => {}}
-                    onCancel={() => {}}
-                  />
+                  <CommentReplyBox topLevel onReply={() => {}} onCancel={() => {}} />
                   <CommentsList comments={comments} />
                 </>
               ) : (
-                <p className="text-sm text-reddit-text_secondary">
-                  No recent comments to show.
-                </p>
+                <p className="text-sm text-reddit-text_secondary">No recent comments to show.</p>
               )}
             </div>
           )}
 
           {activeTab === "comments" && (
             <div>
-              <CommentReplyBox
-                topLevel
-                onReply={() => {}}
-                onCancel={() => {}}
-              />
+              <CommentReplyBox topLevel onReply={() => {}} onCancel={() => {}} />
               <CommentsList comments={comments} />
             </div>
           )}
@@ -368,10 +417,21 @@ export default function ProfilePage() {
             profile={profile}
             onFollowToggle={handleFollowToggle}
             isFollowing={isFollowing}
+            followLoading={followLoading}
             loggedInUser={loggedInUser}
+            onEdit={() => setEditOpen(true)}
           />
         </aside>
       </div>
+
+      {/* 🔥 EDIT PROFILE MODAL */}
+      {editOpen && (
+        <EditProfileModal
+          profile={profile}
+          onClose={() => setEditOpen(false)}
+          onUpdated={() => window.location.reload()}
+        />
+      )}
     </div>
   );
 }

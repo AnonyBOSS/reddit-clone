@@ -134,7 +134,7 @@ router.get('/me/saved', auth, async (req, res) => {
 
 // 🔥 FULL PUBLIC PROFILE ENDPOINT 🔥
 // GET /api/users/:username
-router.get('/:username', async (req, res) => {
+router.get('/:username', auth, async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username })
       .select('username displayName bio avatar createdAt');
@@ -152,6 +152,16 @@ router.get('/:username', async (req, res) => {
     // Followers & Following Count
     const followersCount = await Follow.countDocuments({ following: userId });
     const followingCount = await Follow.countDocuments({ follower: userId });
+
+    // 🔥 Check if logged-in user follows this profile
+    let isFollowing = false;
+    if (req.user) {
+      const exists = await Follow.findOne({
+        follower: req.user._id,
+        following: userId,
+      });
+      isFollowing = !!exists;
+    }
 
     // Posts Count + Post Karma
     const postsExist = await Post.find({ author: userId }).select('_id');
@@ -199,11 +209,12 @@ router.get('/:username', async (req, res) => {
         ...user.toObject(),
         followersCount,
         followingCount,
+        isFollowing, 
         karma,
         contributions,
         commentCount,
         postCount: postsExist.length,
-        posts: recentPosts, // 💥 IMPORTANT CHANGE
+        posts: recentPosts,
         moderatedCommunities,
         createdAt: user.createdAt,
       },
@@ -218,9 +229,6 @@ router.get('/:username', async (req, res) => {
     });
   }
 });
-
-
-
 
 // FOLLOW a user ➜ POST /api/users/:username/follow
 router.post('/:username/follow', auth, async (req, res) => {
@@ -269,7 +277,4 @@ router.delete('/:username/follow', auth, async (req, res) => {
   }
 });
 
-
 module.exports = router;
-
-

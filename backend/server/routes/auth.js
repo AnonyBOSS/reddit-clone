@@ -10,7 +10,8 @@ const { writeLimiter } = require('../middleware/rateLimiter'); // New import
 // signup
 router.post('/signup', writeLimiter, async (req, res) => { // Added writeLimiter
 	try {
-		const { username, email, password } = req.body;
+		const { email, password } = req.body;
+		const username = req.body.username.trim();
 		if (!username || !email || !password) return res.status(400).json({ success: false, data: null, error: 'Missing fields' });
 
 		const exists = await User.findOne({ $or: [{ email }, { username }] });
